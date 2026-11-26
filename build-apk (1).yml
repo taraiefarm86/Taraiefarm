@@ -1,0 +1,74 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: web-src
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build aplikasi web Vite
+        working-directory: web-src
+        run: |
+          npm install
+          npm run build
+
+      - name: Siapkan folder web dan logo
+        run: |
+          mkdir -p app-build/www
+          cp -r web-src/dist/* app-build/www/
+          if [ -f web-src/logo.png ]; then
+            mkdir -p app-build/assets
+            cp web-src/logo.png app-build/assets/logo.png
+          elif [ -f web-src/assets/logo.png ]; then
+            mkdir -p app-build/assets
+            cp web-src/assets/logo.png app-build/assets/logo.png
+          elif [ -f web-src/src/assets/images/tarai_efarm_logo_1795681084055.jpg ]; then
+            mkdir -p app-build/assets
+            cp web-src/src/assets/images/tarai_efarm_logo_1795681084055.jpg app-build/assets/logo.png
+          fi
+
+      - name: Install Capacitor & buat proyek Android
+        working-directory: app-build
+        run: |
+          npm init -y
+          npm install @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8
+          npx cap init "Tarai Efarm" "com.taraiefarm.app" --web-dir www
+          npx cap add android
+          if [ -f assets/logo.png ]; then
+            npm install -D @capacitor/assets
+            npx capacitor-assets generate --android --iconBackgroundColor '#ffffff' --splashBackgroundColor '#ffffff'
+          fi
+          npx cap sync android
+
+      - name: Build Debug APK
+        working-directory: app-build/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk "Tarai-Efarm.apk"
+
+      - name: Upload file APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tarai Efarm APK
+          path: app-build/android/Tarai-Efarm.apk
